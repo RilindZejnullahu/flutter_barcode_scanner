@@ -172,7 +172,8 @@ class BarcodeScannerViewController: UIViewController {
     private var isOrientationPortrait = true
     var screenHeight:CGFloat = 0
     let captureMetadataOutput = AVCaptureMetadataOutput()
-    
+    let videoDataOutput = AVCaptureVideoDataOutput()
+    var initialTorchModeSetCounter: Int = 0
     private lazy var xCor: CGFloat! = {
         return self.isOrientationPortrait ? (screenSize.width - (screenSize.width*0.8))/2 :
             (screenSize.width - (screenSize.width*0.6))/2
@@ -192,7 +193,7 @@ class BarcodeScannerViewController: UIViewController {
     /// Create and return flash button
     private lazy var flashIcon : UIButton! = {
         let flashButton = UIButton()
-        flashButton.setTitle("Flash",for:.normal)
+        flashButton.setTitle("Ficklampa",for:.normal)
         flashButton.translatesAutoresizingMaskIntoConstraints=false
         
         flashButton.setImage(UIImage(named: "ic_flash_off", in: Bundle(for: SwiftFlutterBarcodeScannerPlugin.self), compatibleWith: nil),for:.normal)
@@ -239,7 +240,6 @@ class BarcodeScannerViewController: UIViewController {
         self.initBarcodeComponents()
     }
 
-
     // Inititlize components
     func initBarcodeComponents(){
 
@@ -263,13 +263,25 @@ class BarcodeScannerViewController: UIViewController {
             let captureRectWidth = self.isOrientationPortrait ? (screenSize.width*0.8):(screenSize.height*0.8)
 
             captureMetadataOutput.rectOfInterest = CGRect(x: xCor, y: yCor, width: captureRectWidth, height: screenHeight)
+            
+            videoDataOutput.setSampleBufferDelegate(self, queue: DispatchQueue.main)
+            
+             videoDataOutput.videoSettings = [(kCVPixelBufferPixelFormatTypeKey as String): NSNumber(value:kCVPixelFormatType_32BGRA)]
+            videoDataOutput.alwaysDiscardsLateVideoFrames = true
+        
             if captureSession.outputs.isEmpty {
                 captureSession.addOutput(captureMetadataOutput)
+            }
+            
+            if captureSession.canAddOutput(videoDataOutput) {
+                captureSession.addOutput(videoDataOutput)
             }
             // Set delegate and use the default dispatch queue to execute the call back
             captureMetadataOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
             captureMetadataOutput.metadataObjectTypes = supportedCodeTypes
             //            captureMetadataOutput.metadataObjectTypes = [AVMetadataObject.ObjectType.qr]
+            
+            captureSession.commitConfiguration()
 
         } catch {
             // If any error occurs, simply print it out and don't continue any more.
@@ -310,7 +322,10 @@ class BarcodeScannerViewController: UIViewController {
 
 
         // Start video capture.
+        initialTorchModeSetCounter = 0
+        
         captureSession.startRunning()
+        
 
         let scanRect = CGRect(x: xCor, y: yCor, width: self.isOrientationPortrait ? (screenSize.width*0.8) : (screenSize.height*0.8), height: screenHeight)
 
@@ -382,10 +397,12 @@ class BarcodeScannerViewController: UIViewController {
 
     private func flashIconOff() {
         flashIcon.setImage(UIImage(named: "ic_flash_off", in: Bundle(for: SwiftFlutterBarcodeScannerPlugin.self), compatibleWith: nil),for:.normal)
+        flashIcon.accessibilityLabel = "Ficklampa av"
     }
 
     private func flashIconOn() {
         flashIcon.setImage(UIImage(named: "ic_flash_on", in: Bundle(for: SwiftFlutterBarcodeScannerPlugin.self), compatibleWith: nil),for:.normal)
+        flashIcon.accessibilityLabel = "Ficklampa på"
     }
 
     private func setFlashStatus(device: AVCaptureDevice, mode: AVCaptureDevice.TorchMode) {
@@ -533,6 +550,41 @@ class BarcodeScannerViewController: UIViewController {
                 self.delegate?.userDidScanWith(barcode: decodedURL)
             })
         }
+    }
+}
+
+func getBrightness(sampleBuffer: CMSampleBuffer) -> Double {
+    let rawMetadata = CMCopyDictionaryOfAttachments(allocator: nil, target: sampleBuffer, attachmentMode: CMAttachmentMode(kCMAttachmentMode_ShouldPropagate))
+    let metadata = CFDictionaryCreateMutableCopy(nil, 0, rawMetadata) as NSMutableDictionary
+    let exifData = metadata.value(forKey: "{Exif}") as? NSMutableDictionary
+    let brightnessValue : Double = exifData?[kCGImagePropertyExifBrightnessValue as String] as! Double
+    return brightnessValue
+}
+
+extension BarcodeScannerViewController: AVCaptureVideoDataOutputSampleBufferDelegate {
+    // Sample buffer handling delegate function
+    public func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        
+        debugPrint("test \(initialTorchModeSetCounter) => \(getBrightness(sampleBuffer: sampleBuffer))")
+        if (initialTorchModeSetCounter == 5) {
+            debugPrint("SETTING test => \(getBrightness(sampleBuffer: sampleBuffer))")
+            guard let device = getCaptureDeviceFromCurrentSession(session: captureSession) else {
+                return
+            }
+            
+            let brightnessLevel = getBrightness(sampleBuffer: sampleBuffer)
+            
+            if (brightnessLevel < 0) {
+                if (device.torchMode == AVCaptureDevice.TorchMode.off) {
+                    setFlashStatus(device: device, mode: .on)
+                }
+            } else {
+                if (device.torchMode == AVCaptureDevice.TorchMode.on) {
+                    setFlashStatus(device: device, mode: .off)
+                }
+            }
+        }
+        initialTorchModeSetCounter += 1
     }
 }
 
