@@ -565,9 +565,7 @@ extension BarcodeScannerViewController: AVCaptureVideoDataOutputSampleBufferDele
     // Sample buffer handling delegate function
     public func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         
-        debugPrint("test \(initialTorchModeSetCounter) => \(getBrightness(sampleBuffer: sampleBuffer))")
         if (initialTorchModeSetCounter == 5) {
-            debugPrint("SETTING test => \(getBrightness(sampleBuffer: sampleBuffer))")
             guard let device = getCaptureDeviceFromCurrentSession(session: captureSession) else {
                 return
             }
