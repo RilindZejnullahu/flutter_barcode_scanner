@@ -330,6 +330,9 @@ class BarcodeScannerViewController: UIViewController {
 
 
         if let qrCodeFrameView = qrCodeFrameView {
+            qrCodeFrameView.isAccessibilityElement = true
+            //need to add localized strings support to the plugin
+            qrCodeFrameView.accessibilityLabel = "QR-skanner aktiverad"
             self.view.addSubview(qrCodeFrameView)
             self.view.bringSubviewToFront(qrCodeFrameView)
             qrCodeFrameView.layer.insertSublayer(fillLayer, below: videoPreviewLayer!)
@@ -342,13 +345,10 @@ class BarcodeScannerViewController: UIViewController {
             qrCodeFrameView.layoutSubviews()
             qrCodeFrameView.setNeedsUpdateConstraints()
             self.view.bringSubviewToFront(cancelButton)
-
-            qrCodeFrameView.isAccessibilityElement = true
-            //need to add localized strings support to the plugin
-            qrCodeFrameView.accessibilityLabel = "QR-skanner aktiverad"
         }
         setConstraintsForControls()
         self.drawLine()
+        UIAccessibility.post(notification: .screenChanged, argument: qrCodeFrameView)
         processCompletionCallback()
     }
 
