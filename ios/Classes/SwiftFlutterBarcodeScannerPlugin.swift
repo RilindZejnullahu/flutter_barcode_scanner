@@ -172,7 +172,9 @@ class BarcodeScannerViewController: UIViewController {
     private var isOrientationPortrait = true
     var screenHeight:CGFloat = 0
     let captureMetadataOutput = AVCaptureMetadataOutput()
-
+    lazy var workItem = DispatchWorkItem {
+        self.cancelButtonClicked()
+    }
     private lazy var xCor: CGFloat! = {
         return self.isOrientationPortrait ? (screenSize.width - (screenSize.width*0.8))/2 :
             (screenSize.width - (screenSize.width*0.6))/2
@@ -216,9 +218,7 @@ class BarcodeScannerViewController: UIViewController {
         self.initUIComponents()
         
         //Timeout after 2 min
-        DispatchQueue.main.asyncAfter(deadline: .now() + 120) {
-            self.cancelButtonClicked()
-        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 120, execute: self.workItem)
     }
 
     override public func viewWillAppear(_ animated: Bool) {
@@ -227,6 +227,7 @@ class BarcodeScannerViewController: UIViewController {
     }
 
     override public func viewDidDisappear(_ animated: Bool){
+        self.workItem.cancel()
         // Stop video capture
         captureSession.stopRunning()
     }
